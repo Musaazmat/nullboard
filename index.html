@@ -3809,7 +3809,7 @@
 	}
 
 	var gistSyncBusy = false;
-	var gistSyncLastLocal = '';
+	var gistSyncLastLocal = localStorage.getItem('nullboard.gist.lastSync') || '';
 
 	function getGistSyncBoards()
 	{
@@ -3855,8 +3855,8 @@
 				method = 'PATCH';
 			}
 
-			if (remotePayload && remotePayload.updatedAt && gistSyncLastLocal &&
-				Date.parse(remotePayload.updatedAt) > Date.parse(gistSyncLastLocal) &&
+			if (remotePayload && remotePayload.updatedAt &&
+				(!gistSyncLastLocal || Date.parse(remotePayload.updatedAt) > Date.parse(gistSyncLastLocal)) &&
 				JSON.stringify(remotePayload.boards) !== JSON.stringify(boards))
 			{
 				remotePayload.boards.forEach(function(board){
@@ -3864,6 +3864,7 @@
 					NB.storage.saveBoard(board);
 				});
 				gistSyncLastLocal = remotePayload.updatedAt;
+				localStorage.setItem('nullboard.gist.lastSync', gistSyncLastLocal);
 				if (NB.board && NB.storage.getBoardIndex().has(NB.board.id))
 					openBoard(NB.board.id);
 				return;
@@ -3878,7 +3879,8 @@
 			var result = await response.json();
 			if (!response.ok) throw new Error(result.message || ('GitHub returned ' + response.status));
 			localStorage.setItem('nullboard.gist.id', result.id);
-			gistSyncLastLocal = localPayload;
+			gistSyncLastLocal = JSON.parse(localPayload).updatedAt;
+			localStorage.setItem('nullboard.gist.lastSync', gistSyncLastLocal);
 		}
 		catch (error)
 		{
