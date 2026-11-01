@@ -4764,6 +4764,9 @@
 
 	$('.wrap').on('click', '.board .text', function(ev){
 
+		if (window.matchMedia('(max-width: 767px)').matches)
+			return false;
+
 		if (this.was_dragged)
 		{
 			this.was_dragged = false;
@@ -4937,6 +4940,11 @@
 			openBoard(board_id);
 
 		return false;
+	});
+
+	$('.wrap').on('click', '.board .del-board, .board .undo-board, .board .redo-board, .board .add-list, .board .del-list, .board .mov-list-l, .board .mov-list-r, .board .add-note, .board .del-note, .board .raw-note, .board .collapse', function(){
+		if (window.matchMedia('(max-width: 767px)').matches)
+			return false;
 	});
 
 	$('.wrap').on('click', '.board .del-board', function(){
