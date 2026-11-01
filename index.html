@@ -246,10 +246,21 @@
 
 	/***/
 	@media (max-width: 767px) {
+		.board,
+		.board .lists,
+		.board .list,
+		.board .note,
+		.board .text,
+		.board .head {
+			-webkit-user-select: text !important;
+			user-select: text !important;
+			-webkit-touch-callout: default !important;
+		}
+
 		.board .text {
-			-webkit-user-select: text;
-			user-select: text;
-			-webkit-touch-callout: default;
+			cursor: text;
+			-webkit-user-select: text !important;
+			user-select: text !important;
 		}
 	}
 
