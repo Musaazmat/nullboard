@@ -3833,25 +3833,6 @@
 	var gistSyncPending = false;
 	var gistSyncChangeTimer = null;
 	var gistSyncDirty = false;
-	var gistSyncLastHash = '';
-
-	function checkGistSyncChanges()
-	{
-		var boards = JSON.stringify(getGistSyncBoards());
-		if (boards === gistSyncLastBoards)
-			return;
-
-		if (gistSyncDirty)
-			return;
-
-		gistSyncDirty = true;
-		gistSyncPending = true;
-		gistSyncChangeTimer = setTimeout(function(){
-			gistSyncPending = false;
-			gistSyncChangeTimer = null;
-			syncGistBoards();
-		}, 10000);
-	}
 
 	function getGistSyncBoards()
 	{
@@ -3861,6 +3842,29 @@
 			if (board) boards.push(board);
 		});
 		return boards;
+	}
+
+	function scheduleGistSync(delay)
+	{
+		if (gistSyncChangeTimer)
+			clearTimeout(gistSyncChangeTimer);
+
+		gistSyncPending = true;
+		gistSyncChangeTimer = setTimeout(function(){
+			gistSyncPending = false;
+			gistSyncChangeTimer = null;
+			syncGistBoards();
+		}, delay);
+	}
+
+	function checkGistSyncChanges()
+	{
+		var boards = JSON.stringify(getGistSyncBoards());
+		if (boards === gistSyncLastBoards || gistSyncDirty)
+			return;
+
+		gistSyncDirty = true;
+		scheduleGistSync(5000);
 	}
 
 	async function syncGistBoards()
@@ -3874,9 +3878,7 @@
 		try
 		{
 			var boards = getGistSyncBoards();
-			var localPayload = JSON.stringify({ format: 1, updatedAt: new Date().toISOString(), boards: boards });
-			if (!gistSyncDirty && gistSyncLastBoards && JSON.stringify(boards) === gistSyncLastBoards)
-				return;
+			var boardsJson = JSON.stringify(boards);
 			var endpoint = 'https://api.github.com/gists';
 			var method = 'POST';
 			var remotePayload = null;
@@ -3899,10 +3901,11 @@
 				method = 'PATCH';
 			}
 
-			if (remotePayload && remotePayload.updatedAt &&
-				(!gistSyncLastLocal || Date.parse(remotePayload.updatedAt) > Date.parse(gistSyncLastLocal)) &&
-				JSON.stringify(remotePayload.boards) !== JSON.stringify(boards) &&
-				(!gistSyncDirty || window.matchMedia('(max-width: 768px)').matches))
+			var remoteIsNewer = remotePayload && remotePayload.updatedAt &&
+				(!gistSyncLastLocal || Date.parse(remotePayload.updatedAt) > Date.parse(gistSyncLastLocal));
+			var localChanged = gistSyncDirty || (gistSyncLastBoards && boardsJson !== gistSyncLastBoards);
+
+			if (remoteIsNewer && JSON.stringify(remotePayload.boards) !== boardsJson && !localChanged)
 			{
 				remotePayload.boards.forEach(function(board){
 					board.revision--;
@@ -3922,6 +3925,16 @@
 				return;
 			}
 
+			if (!localChanged && remotePayload)
+			{
+				gistSyncLastLocal = remotePayload.updatedAt || gistSyncLastLocal;
+				localStorage.setItem('nullboard.gist.lastSync', gistSyncLastLocal);
+				gistSyncLastBoards = boardsJson;
+				localStorage.setItem('nullboard.gist.lastBoards', gistSyncLastBoards);
+				return;
+			}
+
+			var localPayload = JSON.stringify({ format: 1, updatedAt: new Date().toISOString(), boards: boards });
 			var body = { description: 'Nullboard cross-device sync', public: false, files: { 'nullboard-sync.json': { content: localPayload } } };
 			var response = await fetch(endpoint, {
 				method: method,
@@ -4397,19 +4410,8 @@
 			updatePageTitle();
 			saveBoard();
 
-			if (gistSyncChangeTimer)
-				clearTimeout(gistSyncChangeTimer);
-
 			gistSyncDirty = true;
-			if (gistSyncChangeTimer)
-				clearTimeout(gistSyncChangeTimer);
-
-			gistSyncPending = true;
-			gistSyncChangeTimer = setTimeout(function(){
-				gistSyncPending = false;
-				gistSyncChangeTimer = null;
-				syncGistBoards();
-			}, 5000);
+			scheduleGistSync(5000);
 		}
 
 		//
@@ -5446,7 +5448,7 @@
 	if (!localStorage.getItem('nullboard.gist.lastBoards'))
 		localStorage.setItem('nullboard.gist.lastBoards', gistSyncLastBoards);
 	setInterval(checkGistSyncChanges, 1000);
-	setInterval(syncGistBoards, 30000);
+	setInterval(syncGistBoards, 10000);
 	$(window).on('focus online', syncGistBoards);
 	setTimeout(syncGistBoards, 2000);
 
