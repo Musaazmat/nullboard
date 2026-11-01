@@ -245,6 +245,14 @@
 	}
 
 	/***/
+	@media (max-width: 767px) {
+		.board .text {
+			-webkit-user-select: text;
+			user-select: text;
+			-webkit-touch-callout: default;
+		}
+	}
+
 	.board {
 		min-width: calc( var(--lw) * 1px );
 
@@ -3810,6 +3818,23 @@
 
 	var gistSyncBusy = false;
 	var gistSyncLastLocal = localStorage.getItem('nullboard.gist.lastSync') || '';
+	var gistSyncLastBoards = localStorage.getItem('nullboard.gist.lastBoards') || '';
+	var gistSyncPending = false;
+
+	function checkGistSyncChanges()
+	{
+		var boards = JSON.stringify(getGistSyncBoards());
+		if (boards === gistSyncLastBoards)
+			return;
+
+		gistSyncPending = true;
+		setTimeout(function(){
+			if (!gistSyncPending)
+				return;
+			gistSyncPending = false;
+			syncGistBoards();
+		}, 10000);
+	}
 
 	function getGistSyncBoards()
 	{
@@ -3881,6 +3906,8 @@
 			localStorage.setItem('nullboard.gist.id', result.id);
 			gistSyncLastLocal = JSON.parse(localPayload).updatedAt;
 			localStorage.setItem('nullboard.gist.lastSync', gistSyncLastLocal);
+			gistSyncLastBoards = JSON.stringify(getGistSyncBoards());
+			localStorage.setItem('nullboard.gist.lastBoards', gistSyncLastBoards);
 		}
 		catch (error)
 		{
@@ -5373,7 +5400,10 @@
 	//
 	setInterval(adjustListScroller, 100);
 
-	setInterval(syncGistBoards, 30000);
+	gistSyncLastBoards = JSON.stringify(getGistSyncBoards());
+	if (!localStorage.getItem('nullboard.gist.lastBoards'))
+		localStorage.setItem('nullboard.gist.lastBoards', gistSyncLastBoards);
+	setInterval(checkGistSyncChanges, 1000);
 	$(window).on('focus online', syncGistBoards);
 	setTimeout(syncGistBoards, 2000);
 
