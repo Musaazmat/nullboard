@@ -3841,10 +3841,10 @@
 		if (boards === gistSyncLastBoards)
 			return;
 
-		gistSyncDirty = true;
-		if (gistSyncChangeTimer)
-			clearTimeout(gistSyncChangeTimer);
+		if (gistSyncDirty)
+			return;
 
+		gistSyncDirty = true;
 		gistSyncPending = true;
 		gistSyncChangeTimer = setTimeout(function(){
 			gistSyncPending = false;
@@ -5443,6 +5443,7 @@
 	if (!localStorage.getItem('nullboard.gist.lastBoards'))
 		localStorage.setItem('nullboard.gist.lastBoards', gistSyncLastBoards);
 	setInterval(checkGistSyncChanges, 1000);
+	setInterval(syncGistBoards, 30000);
 	$(window).on('focus online', syncGistBoards);
 	setTimeout(syncGistBoards, 2000);
 
