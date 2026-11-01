@@ -3820,6 +3820,7 @@
 	var gistSyncLastLocal = localStorage.getItem('nullboard.gist.lastSync') || '';
 	var gistSyncLastBoards = localStorage.getItem('nullboard.gist.lastBoards') || '';
 	var gistSyncPending = false;
+	var gistSyncChangeTimer = null;
 
 	function checkGistSyncChanges()
 	{
@@ -3827,11 +3828,13 @@
 		if (boards === gistSyncLastBoards)
 			return;
 
+		if (gistSyncPending)
+			return;
+
 		gistSyncPending = true;
-		setTimeout(function(){
-			if (!gistSyncPending)
-				return;
+		gistSyncChangeTimer = setTimeout(function(){
 			gistSyncPending = false;
+			gistSyncChangeTimer = null;
 			syncGistBoards();
 		}, 10000);
 	}
