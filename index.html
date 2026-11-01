@@ -3929,6 +3929,9 @@
 				return;
 			}
 
+			if (!localChanged && !remotePayload)
+				return;
+
 			if (!localChanged && remotePayload)
 			{
 				gistSyncLastLocal = remotePayload.updatedAt || gistSyncLastLocal;
