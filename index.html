@@ -3808,6 +3808,88 @@
 		showOverlay($div);
 	}
 
+	var gistSyncBusy = false;
+	var gistSyncLastLocal = '';
+
+	function getGistSyncBoards()
+	{
+		var boards = [];
+		NB.storage.getBoardIndex().forEach(function(meta, id){
+			var board = NB.storage.loadBoard(id, null);
+			if (board) boards.push(board);
+		});
+		return boards;
+	}
+
+	async function syncGistBoards()
+	{
+		var token = localStorage.getItem('nullboard.gist.token') || '';
+		var gistId = localStorage.getItem('nullboard.gist.id') || '';
+		if (!token || gistSyncBusy || !navigator.onLine)
+			return;
+
+		gistSyncBusy = true;
+		try
+		{
+			var boards = getGistSyncBoards();
+			var localPayload = JSON.stringify({ format: 1, updatedAt: new Date().toISOString(), boards: boards });
+			var endpoint = 'https://api.github.com/gists';
+			var method = 'POST';
+			var remotePayload = null;
+
+			if (gistId)
+			{
+				var response = await fetch(endpoint + '/' + encodeURIComponent(gistId), {
+					headers: { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + token }
+				});
+				var result = await response.json();
+				if (!response.ok) throw new Error(result.message || ('GitHub returned ' + response.status));
+				var file = result.files && result.files['nullboard-sync.json'];
+				if (file && file.content)
+				{
+					remotePayload = JSON.parse(file.content);
+					if (remotePayload.format !== 1 || !Array.isArray(remotePayload.boards))
+						throw new Error('Invalid Nullboard sync data.');
+				}
+				endpoint += '/' + encodeURIComponent(gistId);
+				method = 'PATCH';
+			}
+
+			if (remotePayload && remotePayload.updatedAt && gistSyncLastLocal &&
+				Date.parse(remotePayload.updatedAt) > Date.parse(gistSyncLastLocal) &&
+				JSON.stringify(remotePayload.boards) !== JSON.stringify(boards))
+			{
+				remotePayload.boards.forEach(function(board){
+					board.revision--;
+					NB.storage.saveBoard(board);
+				});
+				gistSyncLastLocal = remotePayload.updatedAt;
+				if (NB.board && NB.storage.getBoardIndex().has(NB.board.id))
+					openBoard(NB.board.id);
+				return;
+			}
+
+			var body = { description: 'Nullboard cross-device sync', public: false, files: { 'nullboard-sync.json': { content: localPayload } } };
+			var response = await fetch(endpoint, {
+				method: method,
+				headers: { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			var result = await response.json();
+			if (!response.ok) throw new Error(result.message || ('GitHub returned ' + response.status));
+			localStorage.setItem('nullboard.gist.id', result.id);
+			gistSyncLastLocal = localPayload;
+		}
+		catch (error)
+		{
+			console.error('Automatic Gist sync failed:', error.message);
+		}
+		finally
+		{
+			gistSyncBusy = false;
+		}
+	}
+
 	function configBackups()
 	{
 		var conf = NB.storage.getConfig();
@@ -5288,6 +5370,10 @@
 
 	//
 	setInterval(adjustListScroller, 100);
+
+	setInterval(syncGistBoards, 30000);
+	$(window).on('focus online', syncGistBoards);
+	setTimeout(syncGistBoards, 2000);
 
 	setupListScrolling();
 
