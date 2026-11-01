@@ -3833,6 +3833,7 @@
 	var gistSyncPending = false;
 	var gistSyncChangeTimer = null;
 	var gistSyncDirty = false;
+	var gistSyncLastHash = '';
 
 	function checkGistSyncChanges()
 	{
@@ -3841,15 +3842,14 @@
 			return;
 
 		gistSyncDirty = true;
-		if (gistSyncPending)
-			return;
+		if (gistSyncChangeTimer)
+			clearTimeout(gistSyncChangeTimer);
 
 		gistSyncPending = true;
 		gistSyncChangeTimer = setTimeout(function(){
 			gistSyncPending = false;
 			gistSyncChangeTimer = null;
-			if (gistSyncDirty)
-				syncGistBoards();
+			syncGistBoards();
 		}, 10000);
 	}
 
@@ -4397,8 +4397,11 @@
 			if (gistSyncChangeTimer)
 				clearTimeout(gistSyncChangeTimer);
 
-			gistSyncPending = true;
 			gistSyncDirty = true;
+			if (gistSyncChangeTimer)
+				clearTimeout(gistSyncChangeTimer);
+
+			gistSyncPending = true;
 			gistSyncChangeTimer = setTimeout(function(){
 				gistSyncPending = false;
 				gistSyncChangeTimer = null;
