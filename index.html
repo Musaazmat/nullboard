@@ -246,6 +246,10 @@
 
 	/***/
 	@media (max-width: 767px) {
+		.gist-sync .push {
+			display: none;
+		}
+
 		.board,
 		.board .lists,
 		.board .list,
@@ -3864,7 +3868,7 @@
 			return;
 
 		gistSyncDirty = true;
-		scheduleGistSync(5000);
+		scheduleGistSync(2000);
 	}
 
 	async function syncGistBoards()
@@ -5448,7 +5452,7 @@
 	if (!localStorage.getItem('nullboard.gist.lastBoards'))
 		localStorage.setItem('nullboard.gist.lastBoards', gistSyncLastBoards);
 	setInterval(checkGistSyncChanges, 1000);
-	setInterval(syncGistBoards, 10000);
+	setInterval(syncGistBoards, 5000);
 	$(window).on('focus online', syncGistBoards);
 	setTimeout(syncGistBoards, 2000);
 
