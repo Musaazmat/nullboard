@@ -3832,6 +3832,7 @@
 	var gistSyncLastBoards = localStorage.getItem('nullboard.gist.lastBoards') || '';
 	var gistSyncPending = false;
 	var gistSyncChangeTimer = null;
+	var gistSyncDirty = false;
 
 	function checkGistSyncChanges()
 	{
@@ -3839,6 +3840,7 @@
 		if (boards === gistSyncLastBoards)
 			return;
 
+		gistSyncDirty = true;
 		if (gistSyncPending)
 			return;
 
@@ -3846,7 +3848,8 @@
 		gistSyncChangeTimer = setTimeout(function(){
 			gistSyncPending = false;
 			gistSyncChangeTimer = null;
-			syncGistBoards();
+			if (gistSyncDirty)
+				syncGistBoards();
 		}, 10000);
 	}
 
@@ -3872,6 +3875,8 @@
 		{
 			var boards = getGistSyncBoards();
 			var localPayload = JSON.stringify({ format: 1, updatedAt: new Date().toISOString(), boards: boards });
+			if (!gistSyncDirty && gistSyncLastBoards && JSON.stringify(boards) === gistSyncLastBoards)
+				return;
 			var endpoint = 'https://api.github.com/gists';
 			var method = 'POST';
 			var remotePayload = null;
@@ -3922,6 +3927,7 @@
 			localStorage.setItem('nullboard.gist.lastSync', gistSyncLastLocal);
 			gistSyncLastBoards = JSON.stringify(getGistSyncBoards());
 			localStorage.setItem('nullboard.gist.lastBoards', gistSyncLastBoards);
+			gistSyncDirty = false;
 		}
 		catch (error)
 		{
@@ -4339,6 +4345,20 @@
 		$note.addClass('editing');
 
 		$edit.focus();
+		$edit.off('blur.gistSync').on('blur.gistSync', function(){
+			if (!gistSyncDirty)
+				return;
+
+			if (gistSyncChangeTimer)
+				clearTimeout(gistSyncChangeTimer);
+
+			gistSyncPending = true;
+			gistSyncChangeTimer = setTimeout(function(){
+				gistSyncPending = false;
+				gistSyncChangeTimer = null;
+				syncGistBoards();
+			}, 5000);
+	});
 	}
 
 	function stopEditing($edit, via_escape, via_xclick)
