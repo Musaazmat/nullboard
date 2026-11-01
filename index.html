@@ -4345,20 +4345,6 @@
 		$note.addClass('editing');
 
 		$edit.focus();
-		$edit.off('blur.gistSync').on('blur.gistSync', function(){
-			if (!gistSyncDirty)
-				return;
-
-			if (gistSyncChangeTimer)
-				clearTimeout(gistSyncChangeTimer);
-
-			gistSyncPending = true;
-			gistSyncChangeTimer = setTimeout(function(){
-				gistSyncPending = false;
-				gistSyncChangeTimer = null;
-				syncGistBoards();
-			}, 5000);
-	});
 	}
 
 	function stopEditing($edit, via_escape, via_xclick)
@@ -4402,6 +4388,17 @@
 
 			updatePageTitle();
 			saveBoard();
+
+			if (gistSyncChangeTimer)
+				clearTimeout(gistSyncChangeTimer);
+
+			gistSyncPending = true;
+			gistSyncDirty = true;
+			gistSyncChangeTimer = setTimeout(function(){
+				gistSyncPending = false;
+				gistSyncChangeTimer = null;
+				syncGistBoards();
+			}, 5000);
 		}
 
 		//
