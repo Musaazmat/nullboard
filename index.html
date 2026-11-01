@@ -1160,6 +1160,14 @@
 		transition: opacity 300ms;
 	}
 
+	.overlay .gist-sync { padding: 20px 30px; min-width: 300px; max-width: calc(100vw - 40px); position: relative; }
+	.overlay .gist-sync h3 { font-size: calc(15rem / 11); font-weight: 500; text-align: center; margin: 20px 0 10px; }
+	.overlay .gist-sync .what { text-align: center; max-width: 340px; margin: 0 auto 20px; }
+	.overlay .gist-sync a { color: #1489db; }
+	.overlay .gist-sync label { display: block; margin: 10px 0 3px; }
+	.overlay .gist-sync input { box-sizing: border-box; width: 100%; padding: 5px; border: 1px solid #ccc; }
+	.overlay .gist-sync .status { margin-top: 10px; white-space: pre-wrap; }
+	.overlay .gist-sync .save { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 20px; }
 	.overlay .backup-conf h3 {
 		font-size: calc(15rem / 11);
 		font-weight: 500;
@@ -1572,6 +1580,7 @@
 				<input class=imp-board-select type="file" accept=".nbx">
 
 			<a href=# class=auto-backup>Auto-backup...</a>
+			<a href=# class=gist-sync-open>GitHub Gist sync...</a>
 
 			<div class="section ui-prefs break">
 				<a href=# class=title>UI preferences<u>...</u></a>
@@ -1668,6 +1677,16 @@
 		</div>
 
 		<div class=license>
+		</div>
+
+		<div class=gist-sync>
+			<a href=# class=close>&times;</a>
+			<h3>GitHub Gist Sync</h3>
+			<div class=what>Use a private Gist to sync boards between devices. <a href=https://github.com/settings/tokens target=_blank>Get a token</a></div>
+			<label>GitHub token</label><input class=token type=password autocomplete=off placeholder="Token with gist scope">
+			<label>Gist ID</label><input class=gist-id placeholder="Empty creates a private Gist">
+			<div class=status></div>
+			<div class=save><a href=# class=save-settings>Save</a> <a href=# class=push>Push boards</a> <a href=# class=pull>Pull boards</a></div>
 		</div>
 
 		<div class=backup-conf>
@@ -3710,6 +3729,85 @@
 		});
 	}
 
+
+	function configGistSync()
+	{
+		var $div = $('tt .gist-sync').clone();
+		var token = localStorage.getItem('nullboard.gist.token') || '';
+		var gistId = localStorage.getItem('nullboard.gist.id') || '';
+		$div.find('.token').val(token);
+		$div.find('.gist-id').val(gistId);
+
+		function saveSettings()
+		{
+			token = $div.find('.token').val().trim();
+			gistId = $div.find('.gist-id').val().trim();
+			if (!token) { shakeControl($div.find('.token')); return false; }
+			localStorage.setItem('nullboard.gist.token', token);
+			localStorage.setItem('nullboard.gist.id', gistId);
+			$div.find('.status').text('Settings saved on this device.');
+			return true;
+		}
+
+		$div.find('.save-settings').on('click', function(){ saveSettings(); return false; });
+		$div.find('.push').on('click', async function(){
+			if (!saveSettings()) return false;
+			var $status = $div.find('.status');
+			$status.text('Pushing boards...');
+			try
+			{
+				var boards = [];
+				NB.storage.getBoardIndex().forEach(function(meta, id){
+					var board = NB.storage.loadBoard(id, null);
+					if (board) boards.push(board);
+				});
+				var payload = JSON.stringify({ format: 1, updatedAt: new Date().toISOString(), boards: boards });
+				var body = { description: 'Nullboard cross-device sync', public: false, files: { 'nullboard-sync.json': { content: payload } } };
+				var endpoint = 'https://api.github.com/gists';
+				var method = 'POST';
+				if (gistId) { endpoint += '/' + encodeURIComponent(gistId); method = 'PATCH'; }
+				var response = await fetch(endpoint, {
+					method: method,
+					headers: { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+					body: JSON.stringify(body)
+				});
+				var result = await response.json();
+				if (!response.ok) throw new Error(result.message || ('GitHub returned ' + response.status));
+				gistId = result.id;
+				localStorage.setItem('nullboard.gist.id', gistId);
+				$div.find('.gist-id').val(gistId);
+				$status.text('Push complete. Gist ID: ' + gistId);
+			}
+			catch (error) { $status.text('Push failed: ' + error.message); }
+			return false;
+		});
+		$div.find('.pull').on('click', async function(){
+			if (!saveSettings()) return false;
+			var $status = $div.find('.status');
+			if (!gistId) { $status.text('Enter a Gist ID before pulling.'); return false; }
+			if (!confirm('Import boards from this Gist? Existing boards with matching IDs may be overwritten.')) return false;
+			$status.text('Pulling boards...');
+			try
+			{
+				var response = await fetch('https://api.github.com/gists/' + encodeURIComponent(gistId), {
+					headers: { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + token }
+				});
+				var result = await response.json();
+				if (!response.ok) throw new Error(result.message || ('GitHub returned ' + response.status));
+				var file = result.files && result.files['nullboard-sync.json'];
+				if (!file || !file.content) throw new Error('Gist file nullboard-sync.json was not found.');
+				var payload = JSON.parse(file.content);
+				if (payload.format !== 1 || !Array.isArray(payload.boards)) throw new Error('Invalid Nullboard sync data.');
+				importBoard(JSON.stringify(payload.boards));
+				$status.text('Pull complete.');
+			}
+			catch (error) { $status.text('Pull failed: ' + error.message); }
+			return false;
+		});
+		$div.find('.close').on('click', function(){ hideOverlay(); return false; });
+		showOverlay($div);
+	}
+
 	function configBackups()
 	{
 		var conf = NB.storage.getConfig();
@@ -4959,6 +5057,11 @@
 		$(this).attr('href', pack.blob);
 		$(this).attr('download', pack.file);
 		return true;
+	});
+
+	$('.config .gist-sync-open').on('click', function(){
+		configGistSync();
+		return false;
 	});
 
 	$('.config .auto-backup').on('click', function(){
